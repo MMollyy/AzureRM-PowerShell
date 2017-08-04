@@ -36,7 +36,7 @@ Param(
   [ValidateNotNullOrEmpty()]
   [string]$subscriptionId,
 
-  [Parameter(Mandatory = $true,
+  [Parameter(Mandatory = $false,
              HelpMessage="Name of optional key encryption key in KeyVault. A new key with this name will be created if one doesn't exist")]
   [ValidateNotNullOrEmpty()]
   [string]$keyEncryptionKeyName
@@ -46,17 +46,14 @@ Param(
 ########################################################################################################################
 # Section1:  Log-in to Azure and select appropriate subscription. 
 ########################################################################################################################
-<#  
+Write-Host 'Please log into Azure now' -foregroundcolor Green;
+Login-AzureRmAccount -ErrorAction "Stop" 1> $null;
 
-    Write-Host 'Please log into Azure now' -foregroundcolor Green;
-    Login-AzureRmAccount -ErrorAction "Stop" 1> $null;
-
-    if($subscriptionId)
+if($subscriptionId)
     {
         Select-AzureRmSubscription -SubscriptionId $subscriptionId;
     }
 
-#>
 ########################################################################################################################
 # Section2:  Create AAD app . Fill in $aadClientSecret variable if AAD app was already created
 ########################################################################################################################
