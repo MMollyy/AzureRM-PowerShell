@@ -1,0 +1,14 @@
+# A script for logging on to the azure subscription using a Service Principal Name (SPN)
+
+#Variables
+$subscription = Read-Host "Copy/Paste the subscription ID to this field"
+$appId = read-host "Copy/Paste or type the appID (Client ID) to this field"
+$password = read-host "Copy/Paste or type the Client Secret for the subscription to this field"
+$tenantID = Read-Host "Copy and paste the Tenant ID to this input field, or type it"
+
+$azurePassword = ConvertTo-SecureString $password -AsPlainText -Force
+$psCred = New-Object System.Management.Automation.PSCredential($appId, $azurePassword)
+#Login-AzureRmAccount -C -Credential $psCred
+
+Add-AzureRmAccount -Credential $psCred -TenantId $tenantID -ServicePrincipal
+Get-AzureRmLog -StartTime (Get-Date).AddMinutes(-10)
