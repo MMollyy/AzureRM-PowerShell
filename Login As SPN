@@ -8,7 +8,6 @@ $tenantID = Read-Host "Copy and paste the Tenant ID to this input field, or type
 
 $azurePassword = ConvertTo-SecureString $password -AsPlainText -Force
 $psCred = New-Object System.Management.Automation.PSCredential($appId, $azurePassword)
-#Login-AzureRmAccount -C -Credential $psCred
 
 Add-AzureRmAccount -Credential $psCred -TenantId $tenantID -ServicePrincipal
 Get-AzureRmLog -StartTime (Get-Date).AddMinutes(-10)
