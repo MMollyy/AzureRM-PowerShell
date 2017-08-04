@@ -1,0 +1,213 @@
+#VARIABLES
+$Location = westeurope
+
+#below regex is used for validating if an CIDR range looks like one.
+$regex = "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\/([0-9]|[1-2][0-9]|3[0-2]))$"
+
+#Functions
+Function ChooseActionforNSG {
+    #A function that makes users choose the action they wish to perform when launching the script.
+    Write-Output "List of all network security groups & resource groups they belong to:"
+    Get-AzureRmNetworkSecurityGroup | Select Name,ResourceGroupName
+
+    $ActionType = Read-Host "Choose on of the following options:`n 1 = Create a new NSG rule for an existing Network Security Group`n 2 = Remove a NSG rule from an existing Network Security Group`n 3 = Edit a NSG rule`n  4 = Create a new NSG`n 5 = Do nothing, no more actions required.`nOption"
+    switch ($ActionType) {
+        1 {
+                $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group is deployed"
+                $NSGname = Read-Host "Choose a Network Security Group from previous list"
+                $NSGRulename = Read-Host "Type a logical name for the rule. Follow naming convention if applicable"
+                Create_NSGRule $NSGname,$NSGRulename,$RGName,$direction,$priority,$AccessType,$SourceCIDR,$SourcePortRange,$DestinationCIDR,$DestinationPortRange,$ProtocolType
+                
+                #Apply the change to the in memory object
+                Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $NSG
+                ChooseActionforNSG
+        }
+        2 {
+                $NSGname = Read-Host "Choose a Network Security Group from previous list"
+                $NSGRulename = Read-Host "Type the name for the existing rule that needs to be removed from the NSG"
+                $RGName = Read-Host "Type the Resource Group matching the NSG in the previous list"
+                Delete_NSGRule $NSGname,$RGName,$NSGRulename
+                ChooseActionforNSG
+        }
+        3 { 
+                $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group is deployed"
+                $NSGname = Read-Host "Choose a Network Security Group from previous list"
+                Edit_NSGRule $NSGName,$RGName
+                ChooseActionforNSG
+        }
+        4 {
+                $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group needs to be deployed"
+                Create_NSG
+                ChooseActionforNSG
+        }
+        5 {
+                write-output "No more actions required."
+        }
+    }
+}
+
+Function Create_NSGRule { 
+    #A function for creating a NSG rule and applying it.
+    Param ($NSGname,$NSGRulename,$RGName)
+
+    do {
+        try {
+            $Validation = $true
+            [string]$direction = Read-Host "Choose Inbound or Outbound"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($direction -eq "Inbound" -or $direction -eq "Outbound") -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [int]$priority = Read-Host "Assign a priority between 100 and 65000. Make sure this priority is available."
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($priority -ge 100 -and $priority -lt 65000) -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [string]$AccessType = Read-Host "Choose Allow or Deny"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($AccessType -eq "Allow" -or $AccessType -eq "Deny") -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [string]$SourceCIDR = Read-Host "Assign source CIDR. eg: 10.0.0.1/24"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($SourceCIDR -match $regex) -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [int]$SourcePortRange = Read-Host "Assign source port or port range. eg: 1 or 1-20"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($SourcePortRange -ge 1 -and $SourcePortRange -lt 65536) -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [string]$DestinationCIDR = Read-Host "Assign destination CIDR. eg: 10.0.0.1/24"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($DestinationCIDR -match $regex) -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [int]$DestinationPortRange = Read-Host "Assign destination port or port range. eg: 1 or 1-20"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($DestinationPortRange -ge 1 -and $DestinationPortRange -lt 65536) -and $Validation)
+    do {
+        try {
+            $Validation = $true
+            [string]$ProtocolType = Read-Host "Choose TCP or UDP"
+        } # end try
+            catch {$Validation = $false}
+            } # end do 
+    until (($ProtocolType -eq "TCP" -or $ProtocolType -eq "UDP") -and $Validation)
+    
+    $NSG = Get-AzureRmNetworkSecurityGroup -Name $NSGname -ResourceGroupName $RGName
+    $NSGRule = Add-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $NSG -Name $NSGRulename -Direction $direction -Priority $priority `
+    -Access $AccessType -SourceAddressPrefix $SourceCIDR -SourcePortRange $SourcePortRange `
+    -DestinationAddressPrefix $DestinationCIDR -DestinationPortRange $DestinationPortRange -Protocol $ProtocolType
+    $NSGrule
+}
+
+Function Create_NSG {
+    #A function to create a new NSG, including the rules that need to be added, and to which subnet the NSG needs to be applied.
+    Param ($RGName, $Location)
+    
+    $NewNSGname = Read-Host "Type a name for the new NSG"
+    Get-AzureRmResourceGroup -Name $RGName -ev notPresent -ea 0
+    if ($notPresent){
+        Write-Output "Resource Group doesn't exist. Now being created"
+        New-AzureRmResourceGroup -Name $RGName -Location $Location
+        } else {
+            New-AzureRmNetworkSecurityGroup -Name $NewNSGname -Location $Location  -ResourceGroupName $RGName -SecurityRules $NSGRule #could use array of rules or separate by comma, e.g. $Rule1, $Rule2
+            }
+}
+
+Function ApplyNSGtoSubnet {
+    #A function for applying the in-memory NSG changes to a subnet
+    Param ($NSGname,$RGName)
+    Write-Output "List of all VNETs, RG they belong to and subnets belonging to it:"
+    Get-AzureRmVirtualNetwork | select Name,ResourceGroupName,Subnets
+
+    $VNetName = Read-Host "To which VNET does the subnet belong"
+    $VNetRG = Read-Host "Specify the resource group in which the VNET is deployed"
+    $SubnetNm = Read-Host "To which subnet do you want to connect the NSG"
+    $VNET = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $VNetRG
+    $NSG = Get-AzureRmNetworkSecurityGroup -Name $NSGname -ResourceGroupName $RGName
+
+    Set-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $VNET -Name $SubnetNm -AddressPrefix 10.0.0.0/28 -NetworkSecurityGroup $NSG
+    Set-AzureRmVirtualNetwork -VirtualNetwork $VNET
+}
+
+Function Delete_NSGRule { 
+    #A function for deleting a NSG rule and applying it.
+    Param ($NSGname,$RGName,$NSGRulename)
+
+    Get-AzurermNetworkSecurityGroup -Name $NSGname -ResourceGroupName $RGName | Remove-AzureRmNetworkSecurityRuleConfig -Name $NSGRulename | Set-AzureRmNetworkSecurityGroup
+}
+
+Function Edit_NSGRule {
+    #A function for editting a rule. Which in  reality first deletes the rule, then re-creates it with the same priority and all new input.
+    Param ($NSGname,$RGName)
+
+    $NSG = Get-AzureRmNetworkSecurityGroup -Name $NSGname -ResourceGroupName $RGName
+    $NSGview = Read-Host "How do you wish to view the NSG?`n 1= Full NSG details`n 2 = Only NSG rule name overview`nMake your selection"
+    switch ($NSGview) {
+        1 {
+            Get-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $NSG
+        }
+        2 {
+            Get-AzureRmNetworkSecurityGroup -ResourceGroupName $RGName -Name $NSGname | Select SecurityRules
+        }
+    }
+    $NSGRulename = Read-Host "Which rule needs to be editted?"
+    
+    #save the current settings
+    Get-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $NSG -Name $NSGRulename >> log.txt
+    $NSGRuleProperties = Get-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $NSG -Name $NSGRulename | select Name,Protocol,SourceAddressPrefix,SourcePortRange,DestinationAddressPrefix,DestinationPortRange,Access,Priority,Direction
+    
+    #Go through steps to replace the settings of a NSG rule
+    #INCOMPLETE
+
+    #Delete the existing rule before being able to replace it
+    Get-AzurermNetworkSecurityGroup -Name $NSGname -ResourceGroupName $RGName | Remove-AzureRmNetworkSecurityRuleConfig -Name $NSGRulename | Set-AzureRmNetworkSecurityGroup
+}
+
+# Imports Azure Module
+Import-Module Azure -Force
+ 
+# Gets the environment for Public Azure
+$env = Get-AzureRMEnvironment -Name AzureCloud
+ 
+# Prompts for credentials
+Add-AzureRMAccount -Environment $env
+
+#Get list of all subscriptions available with account. Output on screen, request a name as input and select that subscription.
+$Subscriptions = Get-AzureRmSubscription | Select-Object SubscriptionName
+
+Write-Output "List of all subscriptions:"
+$Subscriptions
+$SelectSubscriptionName = Read-Host "Choose a subscription by inputting the name"
+Try {
+    $match = $false
+    foreach ($subscription in $Subscriptions) {
+        if ($subscription -match $SelectSubscriptionName) {$match = $true}
+        }
+        if ($match = $true) {Select-AzureRmSubscription  -SubscriptionName $SelectSubscriptionName; Write-Output "Subscription selected."} else {throw}
+    } Catch {
+        }
+
+ChooseActionforNSG
