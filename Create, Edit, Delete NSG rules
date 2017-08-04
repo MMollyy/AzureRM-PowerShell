@@ -12,7 +12,7 @@ Function ChooseActionforNSG {
 
     $ActionType = Read-Host "Choose on of the following options:`n 1 = Create a new NSG rule for an existing Network Security Group`n 2 = Remove a NSG rule from an existing Network Security Group`n 3 = Edit a NSG rule`n  4 = Create a new NSG`n 5 = Do nothing, no more actions required.`nOption"
     switch ($ActionType) {
-        1 {
+        1 { #Option for creating a new NSG rule in an existing NSG
                 $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group is deployed"
                 $NSGname = Read-Host "Choose a Network Security Group from previous list"
                 $NSGRulename = Read-Host "Type a logical name for the rule. Follow naming convention if applicable"
@@ -22,25 +22,25 @@ Function ChooseActionforNSG {
                 Set-AzureRmNetworkSecurityGroup -NetworkSecurityGroup $NSG
                 ChooseActionforNSG
         }
-        2 {
+        2 { #Option for deleting an existing NSG rule from a NSG
                 $NSGname = Read-Host "Choose a Network Security Group from previous list"
                 $NSGRulename = Read-Host "Type the name for the existing rule that needs to be removed from the NSG"
                 $RGName = Read-Host "Type the Resource Group matching the NSG in the previous list"
                 Delete_NSGRule $NSGname,$RGName,$NSGRulename
                 ChooseActionforNSG
         }
-        3 { 
+        3 { #Option for editting an existing NSG rule in an existing NSG
                 $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group is deployed"
                 $NSGname = Read-Host "Choose a Network Security Group from previous list"
                 Edit_NSGRule $NSGName,$RGName
                 ChooseActionforNSG
         }
-        4 {
+        4 { #Option for creating a new NSG and linking it to one or more subnets or VMs
                 $RGName = Read-Host "Type the name of the Resource Group in which the Network Security Group needs to be deployed"
                 Create_NSG
                 ChooseActionforNSG
         }
-        5 {
+        5 { #Option to exit the script
                 write-output "No more actions required."
         }
     }
@@ -49,7 +49,8 @@ Function ChooseActionforNSG {
 Function Create_NSGRule { 
     #A function for creating a NSG rule and applying it.
     Param ($NSGname,$NSGRulename,$RGName)
-
+    
+    #for each input a small validational loop to make sure the input is atleast conform requirements.
     do {
         try {
             $Validation = $true
@@ -126,18 +127,20 @@ Function Create_NSG {
     #A function to create a new NSG, including the rules that need to be added, and to which subnet the NSG needs to be applied.
     Param ($RGName, $Location)
     
-    $NewNSGname = Read-Host "Type a name for the new NSG"
+    [string]$NewNSGname = Read-Host "Type a name for the new NSG"
+    
+    #A small check to see whether the resource group already exists or not. If exists it will add the NSGrule to it
     Get-AzureRmResourceGroup -Name $RGName -ev notPresent -ea 0
     if ($notPresent){
         Write-Output "Resource Group doesn't exist. Now being created"
         New-AzureRmResourceGroup -Name $RGName -Location $Location
         } else {
-            New-AzureRmNetworkSecurityGroup -Name $NewNSGname -Location $Location  -ResourceGroupName $RGName -SecurityRules $NSGRule #could use array of rules or separate by comma, e.g. $Rule1, $Rule2
+            New-AzureRmNetworkSecurityGroup -Name $NewNSGname -Location $Location  -ResourceGroupName $RGName -SecurityRules $NSGRule #could use array of rules or separate by comma, e.g. $Rule1, $Rule2 What I want however is a for-each loop of some kind to itterate through an input list
             }
 }
 
 Function ApplyNSGtoSubnet {
-    #A function for applying the in-memory NSG changes to a subnet
+    #A function for applying the in-memory NSG changes to a subnet.
     Param ($NSGname,$RGName)
     Write-Output "List of all VNETs, RG they belong to and subnets belonging to it:"
     Get-AzureRmVirtualNetwork | select Name,ResourceGroupName,Subnets
