@@ -204,3 +204,19 @@ $KeyEncryptionKeyUrl = $KEK.Key.kid;
 Set-AzureRmVMDiskEncryptionExtension -ResourceGroupName $VMResourceGroup -VMName $VMName -AadClientID $AADClientID -AadClientSecret $AADClientSecret -DiskEncryptionKeyVaultUrl $DiskEncryptionKeyVaultUrl -DiskEncryptionKeyVaultId $KeyVaultResourceId -KeyEncryptionKeyUrl $KeyEncryptionKeyUrl -KeyEncryptionKeyVaultId $KeyVaultResourceId;
 
 #>
+########################################################################################################################
+# Section4:  Enable Key Vault audit logging
+########################################################################################################################
+
+#Create a new operational insights workspace specifically for this keyvault its audit logs, and activate audit logging on the keyvault using the workspace.
+$WorkspaceName = $keyVaultName + "-logs"
+
+$workspace = New-AzureRmOperationalInsightsWorkspace -Location $Location -Name $WorkspaceName -Sku Standard -ResourceGroupName $resourceGroupName
+$WorkspaceID = $workspace.ResourceId
+    Write-Host "`nPlease note down below keyvault audit logging information:" -foregroundcolor Green;
+    Write-Host "`t Keyvault Audit workspace name: $WorkspaceName " -foregroundcolor Green;
+    Write-Host "`t Keyvault Audit workspace ID: $workspaceID " -foregroundcolor Green;
+
+$kv = Get-AzureRmKeyVault -VaultName $keyVaultName
+
+Set-AzureRmDiagnosticSetting -ResourceId $kv.ResourceId -workspaceid $workspace.ResourceId -Enabled $true
